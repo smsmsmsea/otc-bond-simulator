@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>장외채권 시뮬레이터</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#f6f2ea;
+    --surface:#ffffff;
+    --surface-2:#efe8d8;
+    --border:#ddd2b8;
+    --text:#22242b;
+    --text-dim:#6b6357;
+    --accent:#a9762a;
+    --accent-soft:#f0e3c8;
+    --up:#c23b4a;
+    --down:#2f6bb0;
+    --tier-gov:#3c6e56;
+    --tier-corp:#8a4b2f;
+    --stress-calm:#3c6e56;
+    --stress-mid:#a9762a;
+    --stress-high:#c23b4a;
+    --shadow:0 1px 2px rgba(30,20,10,.06), 0 4px 14px rgba(30,20,10,.06);
+    --font-display:'IBM Plex Sans KR','Malgun Gothic',system-ui,sans-serif;
+    --font-mono:'IBM Plex Mono','Noto Sans Mono CJK KR',ui-monospace,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#12151b;
+      --surface:#1a1f28;
+      --surface-2:#212836;
+      --border:#2b3242;
+      --text:#e7e9ee;
+      --text-dim:#8b93a3;
+      --accent:#d3a054;
+      --accent-soft:#3a3222;
+      --up:#e5606d;
+      --down:#5b8fd6;
+      --tier-gov:#5fae8a;
+      --tier-corp:#d98a5e;
+      --stress-calm:#5fae8a;
+      --stress-mid:#d3a054;
+      --stress-high:#e5606d;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  *{box-sizing:border-box;}
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+  html,body{ margin:0; padding:0; }
+  body{ background:var(--bg); color:var(--text); font-family:var(--font-display); }
+  .mono{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+  h1,h2,h3{ text-wrap:balance; margin:0; }
+  button, input, select{ font-family:inherit; font-size:inherit; color:inherit; }
+  button{ cursor:pointer; }
+  :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  img{ max-width:100%; }
+
+  .app{ max-width:1180px; margin:0 auto; padding:20px 16px 40px; display:flex; flex-direction:column; gap:16px; }
+
+  .topbar{ display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:10px 20px; padding-bottom:4px; border-bottom:1px solid var(--border); }
+  .topbar .title-block{ display:flex; flex-direction:column; gap:2px; }
+  .topbar h1{ font-size:22px; font-weight:700; letter-spacing:-.01em; }
+  .topbar .caption{ font-size:12.5px; color:var(--text-dim); }
+  .topbar .right{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .day-badge{ font-family:var(--font-mono); font-size:13px; background:var(--surface-2); border:1px solid var(--border); padding:5px 10px; border-radius:6px; }
+  .btn{ border:1px solid var(--border); background:var(--surface); border-radius:7px; padding:8px 14px; font-weight:600; font-size:13.5px; }
+  .btn:hover{ border-color:var(--accent); }
+  .btn.primary{ background:var(--accent); color:var(--bg); border-color:var(--accent); }
+  .btn.primary:hover{ filter:brightness(1.06); }
+  .btn.subtle{ background:transparent; border-color:transparent; color:var(--text-dim); padding:6px 10px; }
+  .btn.subtle:hover{ color:var(--text); border-color:var(--border); }
+  .btn.small{ padding:5px 10px; font-size:12.5px; }
+  .btn:disabled{ opacity:.4; cursor:not-allowed; }
+
+  .grid{ display:grid; grid-template-columns:250px 1fr 300px; gap:16px; align-items:start; }
+  @media (max-width:900px){ .grid{ grid-template-columns:1fr; } }
+
+  .panel{ background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:16px; display:flex; flex-direction:column; gap:12px; }
+  .panel h2{ font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); }
+
+  .bond-row{ display:flex; flex-direction:column; gap:6px; padding:10px; border:1px solid var(--border); border-radius:9px; background:var(--surface); cursor:pointer; }
+  .bond-row.active{ border-color:var(--accent); background:var(--accent-soft); }
+  .bond-row .line1{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .bond-row .name{ font-weight:600; font-size:14px; }
+  .tier-pill{ font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:99px; letter-spacing:.02em; white-space:nowrap; }
+  .tier-pill.gov{ color:var(--tier-gov); background:color-mix(in srgb, var(--tier-gov) 16%, transparent); }
+  .tier-pill.corp{ color:var(--tier-corp); background:color-mix(in srgb, var(--tier-corp) 16%, transparent); }
+  .bond-row .line2{ display:flex; align-items:center; justify-content:space-between; font-size:12.5px; color:var(--text-dim); }
+  .bond-row .price{ font-family:var(--font-mono); font-weight:600; color:var(--text); }
+  .delta.up{ color:var(--up); }
+  .delta.down{ color:var(--down); }
+  .delta.flat{ color:var(--text-dim); }
+
+  .desk-head{ display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .desk-head .bondname{ font-size:19px; font-weight:700; }
+  .desk-head .sub{ font-size:12.5px; color:var(--text-dim); margin-top:2px; }
+  .theo-box{ text-align:right; }
+  .theo-box .price{ font-family:var(--font-mono); font-size:22px; font-weight:600; }
+  .theo-box .yield{ font-family:var(--font-mono); font-size:13px; color:var(--text-dim); }
+
+  .formula{ font-size:11.5px; color:var(--text-dim); background:var(--surface-2); border:1px dashed var(--border); border-radius:7px; padding:8px 10px; font-family:var(--font-mono); }
+
+  .order-controls{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+  .side-toggle{ display:inline-flex; border:1px solid var(--border); border-radius:7px; overflow:hidden; }
+  .side-toggle button{ border:none; background:var(--surface); padding:7px 16px; font-weight:600; font-size:13px; }
+  .side-toggle button.active[data-side="buy"]{ background:var(--down); color:#fff; }
+  .side-toggle button.active[data-side="sell"]{ background:var(--up); color:#fff; }
+  .qty-field{ display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--text-dim); }
+  .qty-field input{ width:80px; border:1px solid var(--border); border-radius:6px; padding:6px 8px; background:var(--surface); font-family:var(--font-mono); }
+
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-dim); font-weight:600; padding:4px 8px; border-bottom:1px solid var(--border); }
+  td{ padding:8px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  tr:last-child td{ border-bottom:none; }
+  .quote-table td.px{ font-family:var(--font-mono); font-weight:600; }
+  .quote-table .best{ background:var(--accent-soft); }
+
+  .rfq-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .neg-msg{ font-size:12.5px; background:var(--surface-2); border-left:3px solid var(--accent); padding:8px 10px; border-radius:0 7px 7px 0; }
+  .exec-box{ display:flex; flex-direction:column; gap:10px; background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:12px; }
+  .exec-box .row{ display:flex; justify-content:space-between; font-size:13px; }
+  .exec-box .row .v{ font-family:var(--font-mono); font-weight:600; }
+
+  .empty{ font-size:13px; color:var(--text-dim); padding:14px 0; text-align:center; }
+
+  .pos-table td, .pos-table th{ padding:6px 8px; }
+  .pnl{ font-family:var(--font-mono); font-weight:600; }
+  .pnl.up{ color:var(--up); } .pnl.down{ color:var(--down); } .pnl.flat{ color:var(--text-dim); }
+
+  .summary-row{ display:flex; justify-content:space-between; align-items:baseline; padding-top:6px; border-top:1px solid var(--border); }
+  .summary-row .label{ font-size:12.5px; color:var(--text-dim); }
+  .summary-row .value{ font-family:var(--font-mono); font-size:16px; font-weight:700; }
+
+  .log-list{ display:flex; flex-direction:column; gap:6px; max-height:230px; overflow-y:auto; }
+  .log-item{ font-size:12px; border:1px solid var(--border); border-radius:7px; padding:7px 9px; display:flex; flex-direction:column; gap:2px; }
+  .log-item .top{ display:flex; justify-content:space-between; color:var(--text-dim); }
+  .log-item .side-tag{ font-weight:700; }
+  .log-item .side-tag.buy{ color:var(--down); }
+  .log-item .side-tag.sell{ color:var(--up); }
+
+  .footer-note{ font-size:11.5px; color:var(--text-dim); text-align:center; padding-top:4px; }
+  .footer-note a{ color:var(--accent); }
+
+  svg.spark{ display:block; overflow:visible; }
+
+  .stress-gauge{ display:flex; flex-direction:column; gap:8px; }
+  .stress-bar-track{ height:10px; border-radius:99px; background:var(--surface-2); border:1px solid var(--border); overflow:hidden; }
+  .stress-bar-fill{ height:100%; border-radius:99px; transition:width .3s ease; }
+  .stress-label{ display:flex; justify-content:space-between; align-items:baseline; font-size:13px; }
+  .stress-label .level{ font-weight:700; }
+  .stress-components{ display:flex; flex-direction:column; gap:4px; font-size:11.5px; color:var(--text-dim); }
+  .stress-components .comp-row{ display:flex; justify-content:space-between; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="topbar">
+    <div class="title-block">
+      <h1>장외채권 시뮬레이터</h1>
+      <div class="caption" id="captionLine">장외채권 RFQ·딜러 협상 모의 트레이딩 · 한국은행 ECOS 실제 금리·환율·증시 데이터 매일 자동 갱신</div>
+    </div>
+    <div class="right">
+      <span class="day-badge mono" id="baseRateBadge">기준금리 -</span>
+      <span class="day-badge mono" id="dateBadge">기준일 -</span>
+      <button class="btn subtle small" onclick="checkForUpdates()">↻ 최신 데이터 확인</button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="panel" id="bondListPanel" aria-label="채권 목록">
+      <h2>채권 유니버스</h2>
+      <div id="bondList" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <h2 style="margin-top:6px;">시장 상황</h2>
+      <div id="stressBox"></div>
+    </section>
+
+    <section class="panel" id="deskPanel" aria-label="거래 데스크"></section>
+
+    <aside class="panel" aria-label="포트폴리오">
+      <h2>포트폴리오 &amp; 손익</h2>
+      <div id="portfolioBox"></div>
+      <h2 style="margin-top:6px;">딜러 성과</h2>
+      <div id="dealerStatsBox"></div>
+      <h2 style="margin-top:6px;">체결 내역</h2>
+      <div id="logBox"></div>
+    </aside>
+  </main>
+
+  <div class="footer-note">데이터 출처: 한국은행 ECOS 시장금리(817Y002)·기준금리(722Y001)·환율(731Y001)·주가지수(802Y001), GitHub Actions로 매일 자동 수집 · 가격은 액면 10,000원 기준 · 손익 표기는 국내 시장 관행에 따라 <span style="color:var(--up);font-weight:700;">상승/이익 = 빨강</span>, <span style="color:var(--down);font-weight:700;">하락/손실 = 파랑</span> · 딜러 호가·협상·시장상황 반응은 모의 로직입니다</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var BONDS = [
+    { id:'ktb3',    name:'국고채 3년',      tier:'gov',  tierLabel:'국채',  coupon:0.030, years:3,  curve:'y3',  spreadKey:null },
+    { id:'ktb10',   name:'국고채 10년',     tier:'gov',  tierLabel:'국채',  coupon:0.035, years:10, curve:'y10', spreadKey:null },
+    { id:'corpAA',  name:'회사채 AA- 3년',  tier:'corp', tierLabel:'회사채', coupon:0.040, years:3,  curve:'y3',  spreadKey:'corpAA' },
+    { id:'corpBBB', name:'회사채 BBB0 3년', tier:'corp', tierLabel:'회사채', coupon:0.055, years:3,  curve:'y3',  spreadKey:'corpBBB' }
+  ];
+
+  var BASE_SPREAD_PCT = { ktb3:0.05, ktb10:0.08, corpAA:0.12, corpBBB:0.25 };
+
+  var DEALER_DEFS = {
+    d1:{ name:'청람증권',   mult:0.90, flex:0.35 },
+    d2:{ name:'온빛캐피탈', mult:1.30, flex:0.65 },
+    d3:{ name:'대현투자',   mult:1.05, flex:0.50 }
+  };
+
+  function bondById(id){ for(var i=0;i<BONDS.length;i++){ if(BONDS[i].id===id) return BONDS[i]; } return null; }
+
+  function defaultState(){
+    var dealers = {};
+    var dealerStats = {};
+    Object.keys(DEALER_DEFS).forEach(function(k){
+      var d = DEALER_DEFS[k];
+      dealers[k] = { name:d.name, mult:d.mult, flex:d.flex, inventory:{ ktb3:8, ktb10:-6, corpAA:14, corpBBB:-10 } };
+      dealerStats[k] = { trades:0, sumFavBps:0, negotiationsTried:0, negotiationsWon:0 };
+    });
+    var curves = { y3:4.035, y10:4.466 };
+    var spreads = { corpAA:0.671, corpBBB:6.470 };
+    var history = {
+      ktb3:   [3.746,3.778,3.808,3.791,3.781,3.796,3.847,3.798,3.811,3.854,3.836,3.83,3.816,3.755,3.788,3.838,3.878,3.93,3.888,3.884,3.9,3.901,3.91,3.93,4.014,4.025,4.091,4.053,4.063,4.035],
+      ktb10:  [4.208,4.239,4.301,4.294,4.298,4.313,4.382,4.337,4.323,4.376,4.335,4.32,4.288,4.238,4.284,4.313,4.371,4.418,4.367,4.36,4.385,4.401,4.401,4.453,4.54,4.536,4.6,4.547,4.506,4.466],
+      corpAA: [4.448,4.476,4.504,4.496,4.488,4.492,4.542,4.497,4.504,4.542,4.52,4.516,4.5,4.448,4.476,4.516,4.549,4.6,4.567,4.567,4.575,4.575,4.581,4.6,4.688,4.69,4.75,4.716,4.726,4.706],
+      corpBBB:[10.246,10.276,10.305,10.297,10.293,10.298,10.35,10.311,10.319,10.356,10.333,10.328,10.312,10.259,10.285,10.324,10.356,10.406,10.375,10.374,10.382,10.382,10.388,10.405,10.486,10.493,10.542,10.51,10.523,10.505],
+      usdkrw: [1418.8,1420.1,1415.3,1415,1415,1414.9,1415.2,1411,1402.5,1393,1383.6,1380.6,1383.1,1384.6,1380.3,1376.5,1373.6,1370.3,1369.4,1359.5,1355.2,1342.6,1341.1,1337.9,1338.2,1346.4,1345.3,1353.3,1368.3,1380.3],
+      kospi:  [6258.77,6299.66,6345.53,6579.04,6813.34,6977.94,6869.83,6471.17,6852.58,6912.95,6696.96,6742.74,6808.21,6912.37,6788.88,6820.02,6835.8,6562.72,6579.48,6687.21,6995.39,6954.52,7051.64,7033.92,6909.91,6684.37,6627.26,6717.97,6715.41,6894.23]
+    };
+    var portfolio = {};
+    BONDS.forEach(function(b){ portfolio[b.id] = { qty:0, avg:0 }; });
+    return {
+      curves:curves,
+      prevCurves:{ y3:4.063, y10:4.506 },
+      spreads:spreads,
+      history:history,
+      dealers:dealers,
+      dealerStats:dealerStats,
+      portfolio:portfolio,
+      realizedPnl:0,
+      trades:[],
+      selectedBond:'ktb3',
+      rfq:null,
+      baseRate:3.00,
+      asOfDate:'2026-09-18',
+      dataSource:'fallback'
+    };
+  }
+
+  var state = defaultState();
+
+  function clamp(v,lo,hi){ return Math.max(lo, Math.min(hi, v)); }
+
+  function bondYield(bond){
+    return state.curves[bond.curve] + (bond.spreadKey ? state.spreads[bond.spreadKey] : 0);
+  }
+
+  function bondPrice(coupon, yieldPct, years){
+    var face = 10000, freq = 2;
+    var n = Math.round(years * freq);
+    var c = face * coupon / freq;
+    var r = (yieldPct/100) / freq;
+    var pv = 0;
+    for(var t=1;t<=n;t++){ pv += c / Math.pow(1+r, t); }
+    pv += face / Math.pow(1+r, n);
+    return pv;
+  }
+
+  function theoOf(bond){ return bondPrice(bond.coupon, bondYield(bond), bond.years); }
+
+  function bondRisk(bond){
+    var face = 10000, freq = 2;
+    var y = bondYield(bond);
+    var n = Math.round(bond.years * freq);
+    var c = face * bond.coupon / freq;
+    var r = (y/100) / freq;
+    var price = 0, weightedT = 0;
+    for(var t=1;t<=n;t++){
+      var cf = c + (t===n ? face : 0);
+      var pv = cf / Math.pow(1+r, t);
+      price += pv;
+      weightedT += (t/freq) * pv;
+    }
+    var macaulay = weightedT / price;
+    var modified = macaulay / (1+r);
+    var dv01 = modified * price * 0.0001;
+    return { price:price, macaulay:macaulay, modified:modified, dv01:dv01 };
+  }
+
+  function volMultiplier(bond){
+    var key = bond.curve;
+    var move = Math.abs((state.curves[key]||0) - (state.prevCurves[key]!==undefined?state.prevCurves[key]:state.curves[key]));
+    if(move > 0.08) return 1.5;
+    if(move > 0.04) return 1.2;
+    return 1.0;
+  }
+
+  // ---------- market stress (macro regime) ----------
+  function seriesChange(arr, span){
+    if(!arr || arr.length < span+1) return 0;
+    var a = arr[arr.length-1], b = arr[arr.length-1-span];
+    return { abs:a-b, pct:(a-b)/b };
+  }
+
+  function marketStress(){
+    var creditStress = clamp((state.spreads.corpBBB - 6.0) / 2.5, 0, 1);
+    var move3 = seriesChange(state.history.ktb3, 5);
+    var volStress = clamp(Math.abs(move3 ? move3.abs : 0) / 0.30, 0, 1);
+    var fxMove = seriesChange(state.history.usdkrw, 5);
+    var fxStress = clamp((fxMove ? fxMove.pct : 0) / 0.02, 0, 1); // 원화 약세(환율 상승)만 스트레스로 카운트
+    var kospiMove = seriesChange(state.history.kospi, 5);
+    var kospiStress = clamp(-(kospiMove ? kospiMove.pct : 0) / 0.03, 0, 1); // 코스피 하락만 스트레스로 카운트
+    var total = clamp(0.35*creditStress + 0.20*volStress + 0.20*fxStress + 0.25*kospiStress, 0, 1);
+    return { total:total, credit:creditStress, vol:volStress, fx:fxStress, kospi:kospiStress };
+  }
+
+  function getQuote(dealerKey, bond, qty){
+    var dealer = state.dealers[dealerKey];
+    var theo = theoOf(bond);
+    var stress = marketStress();
+    var tierStressMult = bond.tier==='corp' ? (1 + stress.total*0.9) : (1 + stress.total*0.4);
+    var spreadPct = BASE_SPREAD_PCT[bond.id] * dealer.mult * volMultiplier(bond) * (1 + stress.total*0.5) * tierStressMult;
+    if(qty > 50){ spreadPct += (qty-50)/50 * BASE_SPREAD_PCT[bond.id] * 0.5; }
+    var spreadAmt = theo * spreadPct / 100;
+    var inv = dealer.inventory[bond.id] || 0;
+    var skewAmt = -(inv/50) * theo * 0.05/100;
+    var noise = (Math.random()-0.5) * theo * 0.01/100;
+    var mid = theo + skewAmt + noise;
+    return { bid: mid - spreadAmt/2, ask: mid + spreadAmt/2, theo: theo };
+  }
+
+  function fmtPrice(p){ return p.toLocaleString('ko-KR',{minimumFractionDigits:2, maximumFractionDigits:2}); }
+  function fmtYield(y){ return y.toFixed(3) + '%'; }
+  function fmtQty(q){ return q.toLocaleString('ko-KR') + '억'; }
+  function fmtWonPlain(v){
+    var av = Math.abs(v);
+    if(av >= 10000){ return (av/10000).toFixed(2) + '억원'; }
+    return Math.round(av).toLocaleString('ko-KR') + '만원';
+  }
+  function fmtWon(v){
+    var sign = v>0 ? '+' : (v<0 ? '-' : '');
+    return sign + fmtWonPlain(v);
+  }
+  function pnlClass(v){ return v>0.0001 ? 'up' : (v<-0.0001 ? 'down' : 'flat'); }
+
+  function dealerStatLabel(key){
+    var ds = state.dealerStats[key];
+    if(!ds || ds.trades===0) return '거래 이력 없음';
+    var avg = ds.sumFavBps/ds.trades;
+    var s = ds.trades+'회 · 평균 '+(avg>=0?'+':'')+avg.toFixed(1)+'bp';
+    if(ds.negotiationsTried>0){
+      s += ' · 협상성공 '+Math.round(ds.negotiationsWon/ds.negotiationsTried*100)+'%';
+    }
+    return s;
+  }
+
+  function makeSparkline(values){
+    var w=110, h=30, pad=3;
+    var lo = Math.min.apply(null, values), hi = Math.max.apply(null, values);
+    if(hi-lo < 0.001){ hi = lo + 0.05; }
+    var n = values.length;
+    var pts = values.map(function(v,i){
+      var x = n===1 ? pad : pad + (i/(n-1)) * (w-2*pad);
+      var y = h-pad - ((v-lo)/(hi-lo)) * (h-2*pad);
+      return [x,y];
+    });
+    var path = pts.map(function(p,i){ return (i===0?'M':'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ');
+    var last = pts[pts.length-1];
+    var rising = values[values.length-1] >= values[0];
+    var stroke = rising ? 'var(--up)' : 'var(--down)';
+    return '<svg class="spark" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">' +
+      '<path d="'+path+'" fill="none" stroke="'+stroke+'" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>' +
+      '<circle cx="'+last[0].toFixed(1)+'" cy="'+last[1].toFixed(1)+'" r="2.4" fill="'+stroke+'"/>' +
+      '</svg>';
+  }
+
+  // ---------- state-changing actions ----------
+
+  function selectBond(id){
+    state.selectedBond = id;
+    state.rfq = null;
+    saveState(); render();
+  }
+
+  function driftDealerInventory(){
+    Object.keys(state.dealers).forEach(function(k){
+      var d = state.dealers[k];
+      BONDS.forEach(function(b){
+        var cur = d.inventory[b.id] || 0;
+        d.inventory[b.id] = clamp(cur + (Math.random()-0.5)*10, -80, 80);
+      });
+    });
+  }
+
+  function applyMarketData(d, opts){
+    if(!d || !d.curves || !d.history || !d.spreads) return false;
+    var isNewDay = state.asOfDate !== d.asOfDate;
+    state.prevCurves = { y3:state.curves.y3, y10:state.curves.y10 };
+    state.curves = d.curves;
+    state.spreads = d.spreads;
+    state.history = d.history;
+    if(typeof d.baseRate === 'number') state.baseRate = d.baseRate;
+    state.asOfDate = d.asOfDate || state.asOfDate;
+    state.dataSource = 'live';
+    if(isNewDay) driftDealerInventory();
+    state.rfq = null;
+    saveState();
+    if(!opts || !opts.silent) render();
+    return true;
+  }
+
+  function loadMarketFromDb(){
+    fetch('data.json?t=' + Date.now())
+      .then(function(r){ if(!r.ok) throw new Error('http '+r.status); return r.json(); })
+      .then(function(d){ applyMarketData(d); })
+      .catch(function(){ /* keep fallback snapshot */ });
+  }
+
+  function checkForUpdates(){
+    renderCaption('확인 중...');
+    fetch('data.json?t=' + Date.now())
+      .then(function(r){ if(!r.ok) throw new Error('http '+r.status); return r.json(); })
+      .then(function(d){
+        var applied = applyMarketData(d);
+        renderCaption(applied ? ('최신 데이터로 갱신했습니다 (기준일 '+state.asOfDate+')') : '데이터 형식 오류');
+      })
+      .catch(function(){ renderCaption('데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'); });
+  }
+
+  function renderCaption(msg){
+    var el = document.getElementById('captionLine');
+    if(el) el.textContent = msg;
+  }
+
+  function requestQuotes(){
+    var bond = bondById(state.selectedBond);
+    var side = document.querySelector('.side-toggle button.active').getAttribute('data-side');
+    var qtyInput = document.getElementById('qtyInput');
+    var qty = parseFloat(qtyInput.value) || 10;
+    qty = clamp(qty, 1, 300);
+    var pos = state.portfolio[bond.id];
+    if(side === 'sell'){
+      if(pos.qty <= 0){
+        state.rfq = { error:'보유 중인 '+bond.name+'이(가) 없어 매도할 수 없습니다.' };
+        render(); return;
+      }
+      qty = Math.min(qty, pos.qty);
+    }
+    var quotes = {};
+    Object.keys(state.dealers).forEach(function(k){ quotes[k] = getQuote(k, bond, qty); });
+    state.rfq = { bondId:bond.id, side:side, qty:qty, quotes:quotes, chosen:null, currentPrice:null, stage:'quoted', negotiationUsed:false, negotiationMsg:null };
+    render();
+  }
+
+  function cancelRfq(){ state.rfq = null; render(); }
+
+  function pickDirect(dealerKey){
+    var rfq = state.rfq;
+    var q = rfq.quotes[dealerKey];
+    rfq.chosen = dealerKey;
+    rfq.currentPrice = rfq.side==='buy' ? q.ask : q.bid;
+    rfq.stage = 'ready';
+    render();
+  }
+
+  function negotiate(dealerKey){
+    var rfq = state.rfq;
+    var bond = bondById(rfq.bondId);
+    var q = rfq.quotes[dealerKey];
+    var dealer = state.dealers[dealerKey];
+    var stress = marketStress();
+    var effectiveFlex = dealer.flex * (1 - stress.total*0.5);
+    var base = rfq.side==='buy' ? q.ask : q.bid;
+    var improve = q.theo * 0.0005;
+    var full = rfq.side==='buy' ? base - improve : base + improve;
+    var half = rfq.side==='buy' ? base - improve/2 : base + improve/2;
+    var roll = Math.random();
+    var resultPrice, msg, conceded;
+    var rejectCut = (1-effectiveFlex)*0.6;
+    if(roll < rejectCut){
+      resultPrice = base; conceded = false;
+      msg = dealer.name + (stress.total>0.5 ? ': "지금 같은 장에서는 그 가격 어렵습니다."' : ': "그 가격은 어렵습니다, 원래 호가대로 하시죠."');
+    } else if(roll < rejectCut + 0.3){
+      resultPrice = half; conceded = true;
+      msg = dealer.name + ': "많이는 못 맞춰드리지만, 조금만 조정해 드릴게요."';
+    } else {
+      resultPrice = full; conceded = true;
+      msg = dealer.name + ': "좋습니다, 그 가격에 맞춰드리겠습니다."';
+    }
+    rfq.chosen = dealerKey;
+    rfq.currentPrice = resultPrice;
+    rfq.stage = 'ready';
+    rfq.negotiationUsed = true;
+    rfq.negotiationConceded = conceded;
+    rfq.negotiationMsg = msg;
+    render();
+  }
+
+  function executeTrade(){
+    var rfq = state.rfq;
+    var bond = bondById(rfq.bondId);
+    var dealer = state.dealers[rfq.chosen];
+    var price = rfq.currentPrice;
+    var qty = rfq.qty;
+    var pos = state.portfolio[bond.id];
+
+    if(rfq.side === 'buy'){
+      var newQty = pos.qty + qty;
+      pos.avg = newQty===0 ? 0 : (pos.avg*pos.qty + price*qty) / newQty;
+      pos.qty = newQty;
+      dealer.inventory[bond.id] = clamp((dealer.inventory[bond.id]||0) - qty, -80, 80);
+    } else {
+      var sellQty = Math.min(qty, pos.qty);
+      state.realizedPnl += (price - pos.avg) * sellQty;
+      pos.qty -= sellQty;
+      if(pos.qty <= 0){ pos.qty = 0; pos.avg = 0; }
+      dealer.inventory[bond.id] = clamp((dealer.inventory[bond.id]||0) + sellQty, -80, 80);
+    }
+
+    state.trades.unshift({
+      date:state.asOfDate, bondId:bond.id, bondName:bond.name, side:rfq.side,
+      qty:qty, price:price, dealer:dealer.name, negotiated:rfq.negotiationUsed
+    });
+    if(state.trades.length > 15) state.trades.pop();
+
+    var theoAtTrade = rfq.quotes[rfq.chosen].theo;
+    var execBps = ((price - theoAtTrade)/theoAtTrade) * 10000;
+    var favBps = rfq.side==='buy' ? -execBps : execBps;
+    var ds = state.dealerStats[rfq.chosen];
+    if(ds){
+      ds.trades += 1;
+      ds.sumFavBps += favBps;
+      if(rfq.negotiationUsed){
+        ds.negotiationsTried += 1;
+        if(rfq.negotiationConceded) ds.negotiationsWon += 1;
+      }
+    }
+
+    state.rfq = null;
+    saveState(); render();
+  }
+
+  function toggleSide(el){
+    var parent = el.parentElement;
+    Array.prototype.forEach.call(parent.children, function(b){ b.classList.remove('active'); });
+    el.classList.add('active');
+  }
+
+  // ---------- persistence ----------
+  function restore(data){
+    if(data && typeof data === 'object' && Object.keys(data).length){
+      state = Object.assign(defaultState(), data);
+    }
+  }
+  function saveState(){
+    try{ localStorage.setItem('otcBondSimState_v1', JSON.stringify(state)); }catch(e){}
+  }
+  function loadLocal(){
+    try{
+      var raw = localStorage.getItem('otcBondSimState_v1');
+      if(raw) restore(JSON.parse(raw));
+    }catch(e){}
+  }
+
+  // ---------- render ----------
+  function render(){
+    renderBondList();
+    renderDesk();
+    renderPortfolio();
+    renderLog();
+    renderStress();
+    renderDealerStats();
+    var dateBadge = document.getElementById('dateBadge');
+    if(dateBadge) dateBadge.textContent = '기준일 ' + state.asOfDate + (state.dataSource==='live' ? ' 🟢' : ' (예시)');
+    var brb = document.getElementById('baseRateBadge');
+    if(brb) brb.textContent = '기준금리 ' + state.baseRate.toFixed(2) + '%';
+  }
+
+  function stressLevelInfo(v){
+    if(v < 0.33) return { label:'평온', color:'var(--stress-calm)' };
+    if(v < 0.66) return { label:'긴장', color:'var(--stress-mid)' };
+    return { label:'스트레스', color:'var(--stress-high)' };
+  }
+
+  function renderStress(){
+    var el = document.getElementById('stressBox');
+    if(!el) return;
+    var s = marketStress();
+    var info = stressLevelInfo(s.total);
+    el.innerHTML =
+      '<div class="stress-gauge">' +
+        '<div class="stress-label"><span>종합 지수</span><span class="level mono" style="color:'+info.color+';">'+info.label+' ('+Math.round(s.total*100)+')</span></div>' +
+        '<div class="stress-bar-track"><div class="stress-bar-fill" style="width:'+Math.round(s.total*100)+'%;background:'+info.color+';"></div></div>' +
+        '<div class="stress-components">' +
+          '<div class="comp-row"><span>신용스프레드(BBB-)</span><span class="mono">'+Math.round(s.credit*100)+'</span></div>' +
+          '<div class="comp-row"><span>금리 변동성(5일)</span><span class="mono">'+Math.round(s.vol*100)+'</span></div>' +
+          '<div class="comp-row"><span>원화 약세(5일)</span><span class="mono">'+Math.round(s.fx*100)+'</span></div>' +
+          '<div class="comp-row"><span>코스피 하락(5일)</span><span class="mono">'+Math.round(s.kospi*100)+'</span></div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function renderDealerStats(){
+    var el = document.getElementById('dealerStatsBox');
+    if(!el) return;
+    var rows = Object.keys(state.dealers).map(function(k){
+      var d = state.dealers[k];
+      var ds = state.dealerStats[k];
+      var avgTxt = ds.trades>0 ? (ds.sumFavBps/ds.trades>=0?'+':'')+(ds.sumFavBps/ds.trades).toFixed(1)+'bp' : '-';
+      var negTxt = ds.negotiationsTried>0 ? Math.round(ds.negotiationsWon/ds.negotiationsTried*100)+'%' : '-';
+      return '<tr><td>'+d.name+'</td><td class="mono">'+ds.trades+'</td><td class="mono">'+avgTxt+'</td><td class="mono">'+negTxt+'</td></tr>';
+    }).join('');
+    el.innerHTML = '<div style="overflow-x:auto;"><table class="pos-table"><thead><tr><th>딜러</th><th>거래</th><th>평균유불리</th><th>협상성공률</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  }
+
+  function renderBondList(){
+    var el = document.getElementById('bondList');
+    el.innerHTML = BONDS.map(function(b){
+      var hist = state.history[b.id];
+      var cur = hist[hist.length-1];
+      var prev = hist.length>1 ? hist[hist.length-2] : cur;
+      var priceCur = bondPrice(b.coupon, cur, b.years);
+      var pricePrev = bondPrice(b.coupon, prev, b.years);
+      var diff = priceCur - pricePrev;
+      var dcls = diff>0.01 ? 'up' : (diff<-0.01 ? 'down' : 'flat');
+      var arrow = diff>0.01 ? '▲' : (diff<-0.01 ? '▼' : '·');
+      var active = state.selectedBond===b.id ? ' active' : '';
+      return '<div class="bond-row'+active+'" onclick="selectBond(\''+b.id+'\')">' +
+        '<div class="line1"><span class="name">'+b.name+'</span><span class="tier-pill '+b.tier+'">'+b.tierLabel+'</span></div>' +
+        '<div class="line2"><span class="mono">'+fmtYield(cur)+'</span>'+makeSparkline(hist)+'</div>' +
+        '<div class="line2"><span class="price mono">'+fmtPrice(priceCur)+'</span><span class="delta '+dcls+' mono">'+arrow+' '+Math.abs(diff).toFixed(2)+'</span></div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function renderDesk(){
+    var el = document.getElementById('deskPanel');
+    var bond = bondById(state.selectedBond);
+    var y = bondYield(bond);
+    var risk = bondRisk(bond);
+    var theo = risk.price;
+    var rfq = state.rfq;
+
+    var html = '';
+    html += '<div class="desk-head">' +
+      '<div><div class="bondname">'+bond.name+'</div><div class="sub">표면금리 '+ (bond.coupon*100).toFixed(2) +'% · 만기 '+bond.years+'년 · 반기이표</div></div>' +
+      '<div class="theo-box"><div class="price mono">'+fmtPrice(theo)+'원</div><div class="yield">수익률 '+fmtYield(y)+'</div></div>' +
+      '</div>';
+    html += '<div class="formula">이론가 = Σ 쿠폰/(1+y/2)^t + 액면/(1+y/2)^N &nbsp;(액면 10,000원 기준, 반기복리)</div>';
+    html += '<div class="formula">수정듀레이션 '+risk.modified.toFixed(2)+'년 · DV01(100억원 기준) '+fmtWonPlain(risk.dv01*100)+' &nbsp;(금리 1bp 변동 시 가격 변화)</div>';
+
+    if(!rfq){
+      html += renderOrderControls();
+    } else if(rfq.error){
+      html += '<div class="empty">'+rfq.error+'</div>' + renderOrderControls();
+    } else if(rfq.stage === 'quoted'){
+      html += renderQuoteTable(rfq, bond);
+      html += '<div style="display:flex;justify-content:flex-end;"><button class="btn subtle small" onclick="cancelRfq()">호가 취소</button></div>';
+    } else if(rfq.stage === 'ready'){
+      html += renderExecBox(rfq, bond);
+    }
+
+    el.innerHTML = html;
+  }
+
+  function renderOrderControls(){
+    return '<div class="order-controls">' +
+      '<div class="side-toggle">' +
+        '<button type="button" class="active" data-side="buy" onclick="toggleSide(this)">매수</button>' +
+        '<button type="button" data-side="sell" onclick="toggleSide(this)">매도</button>' +
+      '</div>' +
+      '<div class="qty-field">수량 <input type="number" id="qtyInput" value="10" min="1" max="300" step="1"> 억원</div>' +
+      '<button class="btn primary" onclick="requestQuotes()">딜러 호가 요청</button>' +
+      '</div>';
+  }
+
+  function renderQuoteTable(rfq, bond){
+    var sideLabel = rfq.side==='buy' ? '매수 (딜러 매도호가 기준)' : '매도 (딜러 매수호가 기준)';
+    var rows = Object.keys(rfq.quotes).map(function(k){
+      var q = rfq.quotes[k];
+      var d = state.dealers[k];
+      var relevant = rfq.side==='buy' ? q.ask : q.bid;
+      return { key:k, name:d.name, bid:q.bid, ask:q.ask, relevant:relevant };
+    });
+    var bestVal = rfq.side==='buy' ? Math.min.apply(null, rows.map(function(r){return r.relevant;})) : Math.max.apply(null, rows.map(function(r){return r.relevant;}));
+
+    var body = rows.map(function(r){
+      var isBest = Math.abs(r.relevant-bestVal) < 0.0001;
+      return '<tr class="'+(isBest?'best':'')+'">' +
+        '<td>'+r.name+(isBest?' <span style="color:var(--accent);font-size:11px;font-weight:700;">BEST</span>':'')+
+          '<div style="font-size:10.5px;color:var(--text-dim);font-weight:400;">'+dealerStatLabel(r.key)+'</div></td>' +
+        '<td class="px mono">'+fmtPrice(r.bid)+'</td>' +
+        '<td class="px mono">'+fmtPrice(r.ask)+'</td>' +
+        '<td><div class="rfq-actions">' +
+          '<button class="btn small" onclick="pickDirect(\''+r.key+'\')">즉시 체결</button>' +
+          '<button class="btn small subtle" onclick="negotiate(\''+r.key+'\')">협상 시도</button>' +
+        '</div></td>' +
+        '</tr>';
+    }).join('');
+
+    return '<div>' +
+      '<div class="sub" style="margin-bottom:6px;">요청: '+ (rfq.side==='buy'?'매수':'매도') +' '+fmtQty(rfq.qty)+' · '+sideLabel+'</div>' +
+      '<div style="overflow-x:auto;"><table class="quote-table"><thead><tr><th>딜러</th><th>매수호가</th><th>매도호가</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div>' +
+      '</div>';
+  }
+
+  function renderExecBox(rfq, bond){
+    var theo = rfq.quotes[rfq.chosen].theo;
+    var bps = ((rfq.currentPrice - theo)/theo) * 10000;
+    var favorable = rfq.side==='buy' ? bps < 0 : bps > 0;
+    var bpsLabel = (bps>=0?'+':'') + bps.toFixed(1) + 'bp (' + (favorable?'이론가 대비 유리':'이론가 대비 불리') + ')';
+    var msgHtml = rfq.negotiationMsg ? '<div class="neg-msg">'+rfq.negotiationMsg+'</div>' : '';
+    return '<div class="exec-box">' +
+      msgHtml +
+      '<div class="row"><span>거래상대방</span><span class="v">'+state.dealers[rfq.chosen].name+'</span></div>' +
+      '<div class="row"><span>방향 / 수량</span><span class="v">'+(rfq.side==='buy'?'매수':'매도')+' '+fmtQty(rfq.qty)+'</span></div>' +
+      '<div class="row"><span>체결 예정가</span><span class="v mono">'+fmtPrice(rfq.currentPrice)+'원</span></div>' +
+      '<div class="row"><span>이론가 대비</span><span class="v mono" style="color:'+(favorable?'var(--up)':'var(--down)')+';">'+bpsLabel+'</span></div>' +
+      '<div class="rfq-actions">' +
+        '<button class="btn primary" onclick="executeTrade()">체결 확정</button>' +
+        '<button class="btn subtle" onclick="cancelRfq()">취소</button>' +
+      '</div>' +
+      '</div>';
+  }
+
+  function renderPortfolio(){
+    var el = document.getElementById('portfolioBox');
+    var rows = [];
+    var totalUnreal = 0, totalMV = 0, weightedDurSum = 0, totalDV01 = 0;
+    BONDS.forEach(function(b){
+      var pos = state.portfolio[b.id];
+      if(pos.qty > 0){
+        var risk = bondRisk(b);
+        var cur = risk.price;
+        var unreal = (cur - pos.avg) * pos.qty;
+        totalUnreal += unreal;
+        var mv = cur * pos.qty;
+        totalMV += mv;
+        weightedDurSum += risk.modified * mv;
+        totalDV01 += risk.dv01 * pos.qty;
+        rows.push('<tr><td>'+b.name+'</td><td class="mono">'+fmtQty(pos.qty)+'</td><td class="mono">'+fmtPrice(pos.avg)+'</td><td class="mono">'+fmtPrice(cur)+'</td><td class="mono">'+risk.modified.toFixed(2)+'년</td><td class="pnl '+pnlClass(unreal)+'">'+fmtWon(unreal)+'</td></tr>');
+      }
+    });
+    var total = state.realizedPnl + totalUnreal;
+    var avgDuration = totalMV > 0 ? weightedDurSum/totalMV : 0;
+    var html = '';
+    if(rows.length === 0){
+      html += '<div class="empty">아직 보유 포지션이 없습니다.<br>왼쪽에서 채권을 선택해 첫 거래를 시작해보세요.</div>';
+    } else {
+      html += '<div style="overflow-x:auto;"><table class="pos-table"><thead><tr><th>종목</th><th>수량</th><th>평단</th><th>현재가</th><th>듀레이션</th><th>평가손익</th></tr></thead><tbody>'+rows.join('')+'</tbody></table></div>';
+      html += '<div class="summary-row"><span class="label">포트폴리오 듀레이션</span><span class="value mono" style="font-size:13px;">'+avgDuration.toFixed(2)+'년</span></div>';
+      html += '<div class="summary-row"><span class="label">포트폴리오 DV01 (1bp당)</span><span class="value mono" style="font-size:13px;">'+fmtWonPlain(totalDV01)+'</span></div>';
+    }
+    html += '<div class="summary-row"><span class="label">실현손익</span><span class="value pnl '+pnlClass(state.realizedPnl)+'">'+fmtWon(state.realizedPnl)+'</span></div>';
+    html += '<div class="summary-row"><span class="label">평가손익</span><span class="value pnl '+pnlClass(totalUnreal)+'">'+fmtWon(totalUnreal)+'</span></div>';
+    html += '<div class="summary-row"><span class="label" style="font-weight:700;">총 손익</span><span class="value pnl '+pnlClass(total)+'">'+fmtWon(total)+'</span></div>';
+    el.innerHTML = html;
+  }
+
+  function renderLog(){
+    var el = document.getElementById('logBox');
+    if(state.trades.length === 0){
+      el.innerHTML = '<div class="empty">체결 내역 없음</div>';
+      return;
+    }
+    el.innerHTML = '<div class="log-list">' + state.trades.map(function(t){
+      return '<div class="log-item">' +
+        '<div class="top"><span>'+t.date+' · '+t.dealer+(t.negotiated?' · 협상':'')+'</span><span class="side-tag '+t.side+'">'+(t.side==='buy'?'매수':'매도')+'</span></div>' +
+        '<div>'+t.bondName+' '+fmtQty(t.qty)+' @ <span class="mono">'+fmtPrice(t.price)+'</span></div>' +
+        '</div>';
+    }).join('') + '</div>';
+  }
+
+  // expose handlers used by inline onclick
+  window.selectBond = selectBond;
+  window.checkForUpdates = checkForUpdates;
+  window.requestQuotes = requestQuotes;
+  window.cancelRfq = cancelRfq;
+  window.pickDirect = pickDirect;
+  window.negotiate = negotiate;
+  window.executeTrade = executeTrade;
+  window.toggleSide = toggleSide;
+
+  loadLocal();
+  render();
+  loadMarketFromDb();
+
+})();
+</script>
+</body>
+</html>
